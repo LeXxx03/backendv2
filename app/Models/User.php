@@ -51,4 +51,8 @@ class User extends Authenticatable
             'passw' => 'hashed',
         ];
     }
+    public function image()
+    {
+        return $this->belongsTo(Image::class, 'image_id');
+    }
 }

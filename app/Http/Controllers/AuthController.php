@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Image;
 use App\Models\User;
 use App\Models\Post;
 use Illuminate\Http\JsonResponse;
@@ -72,27 +73,38 @@ class AuthController extends Controller
     public function register(Request $request): JsonResponse
 {
     $validator = Validator::make($request->all(), [
-        'name' => 'required|string|max:255',
-        'email' => 'required|string|email|max:255|unique:users',
+        'name' => 'required|string|max:50',
+        'email' => 'required|string|email|max:70|unique:users',
         'passw' => 'required|string|min:8',
-        'phoneNumb' => 'required|string|max:15|unique:users',
-        'city' => 'required|string|max:255',
-        'gender' => 'required|string|max:10',
-        'description' => 'nullable|string|max:1000',
+        'phoneNumb' => 'required|string|max:12|unique:users',
+        'city' => 'required|string|max:80',
+        'gender' => 'required|string|max:15',
+        'description' => 'nullable|string|max:255',
+        'imageId' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048' // Kép validálása
     ]);
 
     if ($validator->fails()) {
         return response()->json(['errors' => $validator->errors()], 422);
     }
 
+    // Kép mentése
+    $imageId = null;
+    if ($request->hasFile('image')) {
+        $path = $request->file('image')->store('images', 'public');
+        $image = Image::create(['path' => $path]);
+        $imageId = $image->id;
+    }
+
+    // Felhasználó létrehozása
     $user = User::create([
         'name' => $request->name,
         'email' => $request->email,
-        'passw' => Hash::make($request->password), // Jelszó hash-elése
+        'passw' => Hash::make($request->passw), // Jelszó hash-elése
         'phoneNumb' => $request->phoneNumb,
         'city' => $request->city,
         'gender' => $request->gender,
         'description' => $request->description,
+        'imageId' => $imageId, // Kép azonosító mentése
     ]);
 
     $token = $user->createToken('auth_token')->plainTextToken;
@@ -101,7 +113,7 @@ class AuthController extends Controller
         'access_token' => $token,
         'token_type' => 'Bearer',
         'user' => [
-            'id' => $user->id,
+            'id' => $user->userId, // Az adatbázisban az elsődleges kulcs neve userId
             'name' => $user->name,
             'email' => $user->email,
         ],
@@ -131,7 +143,7 @@ public function login(Request $request): JsonResponse
         return response()->json(['message' => 'A megadott email vagy telefonszám nem található'], 404);
     }
 
-    if (!Hash::check($request->password, $user->password)) {
+    if (!Hash::check($request->passw, $user->passw)) {
         return response()->json(['message' => 'Hibás jelszó'], 401);
     }
 
@@ -172,6 +184,10 @@ public function login(Request $request): JsonResponse
             'city' => $request->user()->city,
             'gender' => $request->user()->gender,
             'description' => $request->user()->description,
+            'imageId' => $request->user()->imageId,
+            'created_at' => $request->user()->created_at,
+            'updated_at' => $request->user()->updated_at,
+            'image' => $request->user()->image ? asset('storage/' . $request->user()->image->path) : null,
         ], 200);
     }
-}  
+}
