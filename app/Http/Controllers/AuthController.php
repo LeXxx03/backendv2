@@ -5,10 +5,15 @@ namespace App\Http\Controllers;
 use App\Models\Image;
 use App\Models\User;
 use App\Models\Post;
+use App\Models\Like;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\DB;
+
+
 
 class AuthController extends Controller
 {
@@ -70,22 +75,59 @@ class AuthController extends Controller
     /**
      * Felhasználó regisztrálása.
      */
-    public function register(Request $request): JsonResponse
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
+
+public function register(Request $request): JsonResponse
 {
     $validator = Validator::make($request->all(), [
         'name' => 'required|string|max:50',
         'email' => 'required|string|email|max:70|unique:users',
-        'passw' => 'required|string|min:8',
+        'password' => 'required|string|min:8',
         'phoneNumb' => 'required|string|max:12|unique:users',
         'city' => 'required|string|max:80',
         'gender' => 'required|string|max:15',
         'description' => 'nullable|string|max:255',
-        'imageId' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048' // Kép validálása
     ]);
 
     if ($validator->fails()) {
-        return response()->json(['errors' => $validator->errors()], 422);
+        return response()->json([
+            'status' => 'error',
+            'errors' => $validator->errors()
+        ], 422);
     }
+
+    $imageId = null;
+    if ($request->hasFile('image')) {
+        $path = $request->file('image')->store('images', 'public');
+        $image = Image::create(['path' => $path]);
+        $imageId = $image->id;
+    }
+
+    $user = User::create([
+        'name' => $request->name,
+        'email' => $request->email,
+        'password' => Hash::make($request->password),
+        'phoneNumb' => $request->phoneNumb,
+        'city' => $request->city,
+        'gender' => $request->gender,
+        'description' => $request->description,
+        'imageId' => $imageId,
+    ]);
+
+    $token = $user->createToken('auth_token')->plainTextToken;
+
+    return response()->json([
+        'access_token' => $token,
+        'token_type' => 'Bearer',
+        'user' => [
+            'id' => $user->id,
+            'name' => $user->name,
+            'email' => $user->email,
+        ],
+    ], 201);
+}
+
 
     // Kép mentése
     $imageId = null;
@@ -118,7 +160,7 @@ class AuthController extends Controller
             'email' => $user->email,
         ],
     ], 201);
-    }
+    
 
     /**
      * Felhasználó bejelentkezése.
@@ -189,5 +231,57 @@ public function login(Request $request): JsonResponse
             'updated_at' => $request->user()->updated_at,
             'image' => $request->user()->image ? asset('storage/' . $request->user()->image->path) : null,
         ], 200);
+    }
+    
+}
+
+class LikeController extends Controller
+{
+    // Létrehozás vagy frissítés (like/dislike)
+    public function store(Request $request)
+    {
+        $validated = $request->validate([
+            'post_id' => 'required|exists:posts,id',
+            'liked' => 'required|boolean',
+        ]);
+
+        $like = Like::updateOrCreate(
+            [
+                'user_id' => Auth::id(),
+                'post_id' => $validated['post_id'],
+            ],
+            [
+                'liked' => $validated['liked'],
+            ]
+        );
+
+        return response()->json(['success' => true, 'like' => $like]);
+    }
+
+    // Like/dislike szám lekérdezése
+    public function getLikes($postId)
+    {
+        $likes = Like::where('post_id', $postId)->get();
+
+        return response()->json([
+            'likes' => $likes->where('liked', true)->count(),
+            'dislikes' => $likes->where('liked', false)->count()
+        ]);
+    }
+}
+// Noti kezelés
+class NotificationController extends Controller
+{
+    public function index()
+    {
+        $userId = Auth::id();
+
+        // Feltételezzük, hogy van egy "notifications" tábla
+        $notifications = DB::table('notifications')
+            ->where('user_id', $userId)
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        return response()->json(['notifications' => $notifications]);
     }
 }
