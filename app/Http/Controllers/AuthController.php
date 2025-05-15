@@ -14,7 +14,6 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
 
 
-
 class AuthController extends Controller
 {
     public function index()
@@ -75,59 +74,22 @@ class AuthController extends Controller
     /**
      * Felhasználó regisztrálása.
      */
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Validator;
-
-public function register(Request $request): JsonResponse
+    public function register(Request $request): JsonResponse
 {
     $validator = Validator::make($request->all(), [
         'name' => 'required|string|max:50',
         'email' => 'required|string|email|max:70|unique:users',
-        'password' => 'required|string|min:8',
+        'passw' => 'required|string|min:8',
         'phoneNumb' => 'required|string|max:12|unique:users',
         'city' => 'required|string|max:80',
         'gender' => 'required|string|max:15',
         'description' => 'nullable|string|max:255',
+        'imageId' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048' // Kép validálása
     ]);
 
     if ($validator->fails()) {
-        return response()->json([
-            'status' => 'error',
-            'errors' => $validator->errors()
-        ], 422);
+        return response()->json(['errors' => $validator->errors()], 422);
     }
-
-    $imageId = null;
-    if ($request->hasFile('image')) {
-        $path = $request->file('image')->store('images', 'public');
-        $image = Image::create(['path' => $path]);
-        $imageId = $image->id;
-    }
-
-    $user = User::create([
-        'name' => $request->name,
-        'email' => $request->email,
-        'password' => Hash::make($request->password),
-        'phoneNumb' => $request->phoneNumb,
-        'city' => $request->city,
-        'gender' => $request->gender,
-        'description' => $request->description,
-        'imageId' => $imageId,
-    ]);
-
-    $token = $user->createToken('auth_token')->plainTextToken;
-
-    return response()->json([
-        'access_token' => $token,
-        'token_type' => 'Bearer',
-        'user' => [
-            'id' => $user->id,
-            'name' => $user->name,
-            'email' => $user->email,
-        ],
-    ], 201);
-}
-
 
     // Kép mentése
     $imageId = null;
@@ -160,7 +122,7 @@ public function register(Request $request): JsonResponse
             'email' => $user->email,
         ],
     ], 201);
-    
+    }
 
     /**
      * Felhasználó bejelentkezése.
